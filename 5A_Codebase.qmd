@@ -1,0 +1,343 @@
+---
+title: "Assignment 5A – Airline Delays: CodeBase"
+author: "Muhammad Suffyan Khan"
+date: "2026-02-28"
+format: html
+editor: visual
+---
+
+## Introduction
+
+This assignment examines airline on-time performance data for two airlines (Alaska and Amwest) across five cities. The source data is provided in a wide, non-tidy format that separates counts of "on time" and "delayed" flights by airline and destination.
+
+The primary objective is to recreate the dataset, transform it into tidy format, and compare airline performance both overall and city-by-city using percentages rather than raw counts. A key goal is to analyze and explain any discrepancy between overall performance comparisons and city-level comparisons.
+
+------------------------------------------------------------------------
+
+## Planned Approach
+
+### 1. Recreate the Dataset in Wide Format
+
+I will first recreate the dataset programmatically in R in wide format to match the structure of the original file, including any blank header cells that appear in the source. After constructing the dataframe, I will export it to a CSV file using `write.csv()` and upload it to a publicly accessible GitHub repository. The analysis will then read the dataset from the GitHub raw link to ensure full reproducibility.
+
+The dataset will include:
+
+-   Airline (Alaska, Amwest)
+-   Flight Status (On Time, Delayed)
+-   Five destination cities:
+    -   Los Angeles
+    -   Phoenix
+    -   San Diego
+    -   San Francisco
+    -   Seattle
+
+------------------------------------------------------------------------
+
+### 2. Load Data and Address Missing Structure
+
+After loading the CSV into R, I will:
+
+-   Inspect column names and structure
+-   Programmatically handle any blank or missing values
+-   Ensure counts are numeric
+-   Verify totals per airline and per city
+
+If necessary, I will write code to populate or correct missing structural values to ensure the dataset is complete and consistent before transformation.
+
+------------------------------------------------------------------------
+
+### 3. Transform Data from Wide to Long Format
+
+Using `tidyr` and `dplyr`, I will convert the dataset into tidy (long) format so that:
+
+-   Each row represents one airline city status combination
+-   Variables include:
+    -   airline
+    -   city
+    -   status (on_time or delayed)
+    -   count
+
+This transformation will make percentage calculations and comparisons straightforward and reproducible.
+
+------------------------------------------------------------------------
+
+### 4. Compute Overall Airline Performance (Percent-Based)
+
+To compare airlines overall, I will:
+
+-   Calculate total flights per airline
+-   Compute percentage delayed (and/or percentage on time)
+-   Present results using a summary table and/or visualization
+
+The focus will be on percentages rather than counts, since airlines may operate different numbers of flights.
+
+------------------------------------------------------------------------
+
+### 5. Compare Airline Performance by City
+
+Next, I will use percentage delayed as the primary performance metric for both overall and city-level comparisons.
+
+This comparison will be presented using:
+
+-   Grouped bar charts to visualize city-level percentage differences
+-   Narrative interpretation summarizing patterns
+
+This step allows for a more granular evaluation of airline performance.
+
+------------------------------------------------------------------------
+
+### 6. Investigate and Explain the Discrepancy
+
+If the overall comparison produces a different conclusion than the city-by-city comparison, I will explain the discrepancy.
+
+This phenomenon may arise due to differences in flight volume distribution across cities. Since overall percentages are weighted averages, differences in how many flights each airline operates in each city can change the aggregated result.
+
+This analysis will highlight how aggregation can sometimes produce misleading conclusions when underlying group distributions differ.
+
+------------------------------------------------------------------------
+
+## Anticipated Data Challenges
+
+-   The original dataset is not tidy and requires restructuring.
+-   Blank header cells may require cleaning before transformation.
+-   Percent calculations must use correct denominators.
+-   Care must be taken to avoid comparing raw counts instead of rates.
+-   Interpretation must clearly distinguish between aggregated and stratified comparisons.
+
+------------------------------------------------------------------------
+
+## Reproducibility Plan
+
+-   The CSV file will be stored in a public GitHub repository.
+-   All transformations will be fully reproducible using `tidyverse` functions.
+-   No local file paths will be used.
+-   All code will run in a clean R environment.
+
+------------------------------------------------------------------------
+
+This structured approach ensures that the dataset is recreated faithfully, transformed properly, analyzed rigorously, and interpreted clearly.
+
+```{r,message: false, warning: false}
+library(tidyverse)
+```
+
+## 1) Recreate the dataset in wide format (and intentionally include missing structural values)
+
+Below I create the dataset in wide format to match the original structure (cities as columns). To satisfy the “populate missing data” requirement, I intentionally leave the airline name as NA on the second row of each airline block and later fill it in programmatically.
+
+```{r}
+airline_wide_raw <- tibble::tibble(
+  Airline = c("ALASKA", NA, "AMWEST", NA),
+  Status  = c("on_time", "delayed", "on_time", "delayed"),
+  `Los Angeles`   = c(497,  62,  694, 117),
+  Phoenix         = c(221,  12, 4840, 415),
+  `San Diego`     = c(212,  20,  383,  65),
+  `San Francisco` = c(503, 102,  320, 129),
+  Seattle         = c(1841,305,  201,  61)
+)
+
+airline_wide_raw
+```
+
+## 2) Populate missing data (structural missingness)
+
+Fill down missing airline labels. This is the “populate missing data” step.
+
+```{r}
+airline_wide <- airline_wide_raw %>%
+  tidyr::fill(Airline, .direction = "down")
+
+airline_wide
+```
+
+## 3) Save CSV, upload to GitHub, then read back via Raw link (reproducibility)
+
+This writes the recreated wide dataset to a CSV.
+
+```{r}
+csv_name <- "Airline_delays_wide.csv"
+
+if (!file.exists(csv_name)) {
+  write.csv(airline_wide, csv_name, row.names = FALSE)
+}
+
+list.files()
+```
+
+```{r}
+dataset <- "https://raw.githubusercontent.com/suffyankhan77/Assignment5A-DATA-607/main/Airline_delays_wide.csv"
+
+airline_wide_from_source <- if (nzchar(dataset)) {
+  read.csv(dataset, check.names = FALSE)
+} else {
+  read.csv(csv_name, check.names = FALSE)
+}
+
+airline_wide_from_source
+```
+
+## 4) Transform wide → long (tidy format)
+
+Converted from wide format (cities as columns) to long format where each row is:
+
+Airline, Status, City, Count
+
+```{r}
+airline_long <- airline_wide_from_source %>%
+  as_tibble() %>%
+  pivot_longer(
+    cols = -c(Airline, Status),
+    names_to = "City",
+    values_to = "Count"
+  ) %>%
+  mutate(
+    Airline = as.factor(Airline),
+    Status  = as.factor(Status),
+    City    = as.factor(City),
+    Count   = as.integer(Count)
+  )
+
+airline_long %>% arrange(Airline, City, Status)
+```
+
+## 5) Count analysis (basic checks)
+
+```{r}
+# Total flights by airline
+airline_long %>%
+  group_by(Airline) %>%
+  summarise(total_flights = sum(Count), .groups = "drop")
+
+# Total flights by airline and city
+airline_long %>%
+  group_by(Airline, City) %>%
+  summarise(total_flights = sum(Count), .groups = "drop") %>%
+  arrange(Airline, desc(total_flights))
+```
+
+## Percentage comparisons
+
+## 6) Overall comparison (percent delayed by airline)
+
+```{r}
+overall_perf <- airline_long %>%
+  group_by(Airline, Status) %>%
+  summarise(n = sum(Count), .groups = "drop") %>%
+  group_by(Airline) %>%
+  mutate(
+    total = sum(n),
+    pct = n / total
+  ) %>%
+  ungroup()
+
+overall_perf
+```
+
+## Overall percent delayed (table):
+
+```{r}
+
+overall_delayed <- overall_perf %>%
+  filter(Status == "delayed") %>%
+  transmute(
+    Airline,
+    delayed = n,
+    total,
+    pct_delayed = pct
+  )
+
+overall_delayed
+```
+
+## Overall percent delayed (chart):
+
+```{r}
+overall_delayed %>%
+  ggplot(aes(x = Airline, y = pct_delayed)) +
+  geom_col() +
+  scale_y_continuous(labels = scales::percent_format())
+```
+
+## 7) City-by-city comparison (percent delayed within each city)
+
+```{r}
+
+city_perf <- airline_long %>%
+  group_by(Airline, City, Status) %>%
+  summarise(n = sum(Count), .groups = "drop") %>%
+  group_by(Airline, City) %>%
+  mutate(
+    total = sum(n),
+    pct = n / total
+  ) %>%
+  ungroup()
+
+city_delayed <- city_perf %>%
+  filter(Status == "delayed") %>%
+  transmute(Airline, City, delayed = n, total, pct_delayed = pct)
+
+city_delayed %>% arrange(City, Airline)
+
+
+```
+
+## City-by-city percent delayed (chart):
+
+```{r}
+city_delayed %>%
+  ggplot(aes(x = City, y = pct_delayed, fill = Airline)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  coord_flip()
+```
+
+## 8) Summary of findings (overall vs city-level)
+
+```{r}
+city_winner <- city_delayed %>%
+  group_by(City) %>%
+  slice_min(order_by = pct_delayed, n = 1, with_ties = TRUE) %>%
+  ungroup() %>%
+  select(City, Airline, pct_delayed) %>%
+  arrange(City)
+
+city_winner
+```
+
+From the overall comparison, **AMWEST appears to perform better overall**, with a lower delayed rate (\~10.9%) than ALASKA (\~13.3%). However, the city-by-city results show the opposite pattern: **ALASKA has a lower delayed percentage in every one of the five cities**. This difference between the aggregated (overall) result and the stratified (city-level) result is the key discrepancy explored next.
+
+## Explaining the discrepancy
+
+## 9) Why overall and city-by-city comparisons can disagree
+
+Overall rates are weighted by how many flights each airline has in each city. To show this, I compute each airline’s flight volume by city (weights).
+
+```{r}
+weights <- airline_long %>%
+  group_by(Airline, City) %>%
+  summarise(city_total = sum(Count), .groups = "drop") %>%
+  group_by(Airline) %>%
+  mutate(airline_total = sum(city_total),
+         weight = city_total / airline_total) %>%
+  ungroup() %>%
+  arrange(Airline, desc(weight))
+
+weights
+```
+
+```{r}
+city_delayed %>%
+  left_join(weights, by = c("Airline", "City")) %>%
+  select(Airline, City, pct_delayed, city_total, weight) %>%
+  arrange(City, Airline)
+```
+
+## Conclusions
+
+The overall comparison shows that **AMWEST appears to perform better**, with a lower overall percentage of delayed flights (approximately 10.9%) compared to ALASKA (approximately 13.3%). If we only considered the aggregated totals, we would conclude that AMWEST is the more reliable airline.
+
+However, when we examine the results city-by-city, a different pattern emerges. Within each of the five cities (Los Angeles, Phoenix, San Diego, San Francisco, and Seattle), **ALASKA has a lower percentage of delayed flights than AMWEST**. This means that ALASKA performs better in every individual city, even though it appears worse overall.
+
+This discrepancy occurs because the overall delay rate is a weighted average across cities. AMWEST operates a much larger share of its flights in Phoenix, where both airlines have relatively lower delay rates. In contrast, ALASKA has more flights in cities with higher delay rates, such as Seattle and San Francisco. As a result, the aggregated comparison is heavily influenced by the distribution of flights across cities.
+
+This example demonstrates how aggregation can produce misleading conclusions when underlying group distributions differ. To fairly compare airline performance, it is essential to examine stratified (city-level) results in addition to overall totals.
